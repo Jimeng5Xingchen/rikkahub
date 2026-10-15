@@ -83,6 +83,7 @@ data class Settings(
     val webServerLocalhostOnly: Boolean = false,
     val backupReminderConfig: BackupReminderConfig = BackupReminderConfig(),
     val sponsorAlertDismissedAt: Int = 0,
+    val labSetting: LabSetting = LabSetting(),
 ) {
     companion object {
         // 构造一个用于初始化的settings, 但它不能用于保存，防止使用初始值存储
@@ -198,3 +199,48 @@ data class BackupReminderConfig(
     val intervalDays: Int = 7,
     val lastBackupTime: Long = 0L,
 )
+
+/**
+ * 实验室功能设置。
+ *
+ * [labFeaturesEnabled] 是实验室功能总开关，关闭时所有实验特性（含各子开关）均不可用；
+ * 子开关描述单个实验特性是否启用，仅在总开关开启时才会在 UI 中展示并生效。
+ */
+@Serializable
+data class LabSetting(
+    /** 实验室功能总开关 */
+    val labFeaturesEnabled: Boolean = false,
+    /**
+     * 是否启用 Agent 预终端文件：
+     * 开启后，为工作区安装终端环境（rootfs）时可选择使用 App 内置的
+     * Ubuntu 24.04 (noble) arm64 rootfs 文件，无需再从网络下载。
+     */
+    val agentPreTerminalFileEnabled: Boolean = false,
+) {
+    companion object {
+        /** 内置 rootfs 文件在 assets 下的目录 */
+        const val ROOTFS_ASSET_DIR = "lab"
+
+        /**
+         * 内置 rootfs 文件名（Ubuntu 24.04 noble rootfs, arm64）。
+         * 注意：不能使用 `.tar.gz` 后缀，AGP 打包时会解压并剥掉 `.gz` 后缀，
+         * 导致 assets 里读不到原文件，因此统一用 `.tgz`。
+         */
+        const val ROOTFS_ASSET_NAME = "noble-rootfs-arm64.tgz"
+
+        /** 内置 rootfs 文件完整 assets 路径 */
+        const val ROOTFS_ASSET_PATH = "$ROOTFS_ASSET_DIR/$ROOTFS_ASSET_NAME"
+
+        /** 内置 rootfs 文件字节数，用于设置页展示 */
+        const val ROOTFS_ASSET_SIZE_BYTES = 533_418_834L
+
+        /**
+         * 内置 rootfs 的来源地址（华为云 Ubuntu 云镜像）。
+         * 该 tar.gz 内是 ext4 磁盘镜像（noble-server-cloudimg-arm64.img，
+         * volume name cloudimg-rootfs），已将其中的根文件系统提取为
+         * 本资产，可直接被 RootfsInstaller 解压使用。
+         */
+        const val ROOTFS_ASSET_SOURCE_URL =
+            "https://repo.huaweicloud.com/ubuntu-cloud-images/noble/current/noble-server-cloudimg-arm64.tar.gz"
+    }
+}

@@ -26,13 +26,35 @@ class RootfsInstaller(
         val format = ArchiveFormat.fromUrl(url)
         val tempDir = manager.tempDir(root)
         val archive = File(tempDir, "rootfs.${format.extension}")
+
+        try {
+            download(url, archive, onProgress)
+            installFromArchive(root, archive, format, onProgress)
+        } finally {
+            archive.delete()
+        }
+    }
+
+    /**
+     * 从本地归档文件安装 rootfs，不走网络下载（例如 App 内置的预终端文件）。
+     *
+     * [archive] 由调用方准备和清理，格式按 [format] 解析（默认按文件名推断）。
+     */
+    fun installFromArchive(
+        root: String,
+        archive: File,
+        format: ArchiveFormat = ArchiveFormat.fromFile(archive),
+        onProgress: (RootfsInstallProgress) -> Unit = {},
+    ) {
+        require(archive.isFile) { "Rootfs archive not found: ${archive.path}" }
+        manager.ensureWorkspace(root)
+        val tempDir = manager.tempDir(root)
         val stagingDir = File(tempDir, "rootfs-staging")
         val linuxDir = manager.linuxDir(root)
 
         try {
             stagingDir.deleteRecursively()
             stagingDir.mkdirs()
-            download(url, archive, onProgress)
             extractTar(archive, stagingDir, format, onProgress)
             linuxDir.deleteRecursively()
             require(stagingDir.renameTo(linuxDir)) {
@@ -41,7 +63,6 @@ class RootfsInstaller(
             patcher.patch(linuxDir)
             onProgress(RootfsInstallProgress(stage = RootfsInstallStage.INSTALLED))
         } finally {
-            archive.delete()
             stagingDir.deleteRecursively()
         }
     }

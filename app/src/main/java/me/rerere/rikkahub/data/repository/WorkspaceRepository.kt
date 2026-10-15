@@ -1,12 +1,15 @@
 package me.rerere.rikkahub.data.repository
 
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
+import me.rerere.rikkahub.data.datastore.Settings
 import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.dao.WorkspaceDAO
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
@@ -19,6 +22,7 @@ import me.rerere.workspace.WorkspaceManager
 import me.rerere.workspace.WorkspaceShellStatus
 import me.rerere.workspace.WorkspaceStorageArea
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import kotlin.uuid.Uuid
@@ -29,6 +33,8 @@ class WorkspaceRepository(
     private val rootfsInstaller: RootfsInstaller,
     private val settingsStore: SettingsStore,
 ) {
+    val settingsFlow: StateFlow<Settings> = settingsStore.settingsFlow
+
     fun listFlow(): Flow<List<WorkspaceEntity>> = dao.listFlow()
 
     suspend fun checkIntegrity() = withContext(Dispatchers.IO) {
@@ -139,6 +145,58 @@ class WorkspaceRepository(
             throw CancellationException("Rootfs install cancelled").also { it.initCause(e) }
         } catch (e: Throwable) {
             Log.e(TAG, "installRootfs failed: workspace=${workspace.id}, root=${workspace.root}, url=$url", e)
+            updateShellState(workspace, WorkspaceShellStatus.BROKEN.name)
+            throw e
+        }
+    }
+
+    /**
+     * 从 App 内置资产安装 rootfs（实验室功能 - Agent 预终端文件），不走网络下载。
+     *
+     * @param assetPath assets 下的文件路径，如 "lab/noble-rootfs-arm64.tgz"
+     */
+    suspend fun installRootfsFromAsset(
+        id: String,
+        context: Context,
+        assetPath: String,
+        onProgress: (RootfsInstallProgress) -> Unit = {},
+    ): Boolean {
+        val workspace = dao.getById(id) ?: return false
+        updateShellState(workspace, WorkspaceShellStatus.INSTALLING.name)
+        try {
+            // runInterruptible 让协程取消转成线程中断, 打断 install 内阻塞的解压循环
+            runInterruptible(Dispatchers.IO) {
+                manager.ensureWorkspace(workspace.root)
+                val archive = File(manager.tempDir(workspace.root), "rootfs-asset.tar.gz")
+                try {
+                    context.assets.open(assetPath).use { input ->
+                        archive.outputStream().use { output ->
+                            input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                        }
+                    }
+                    rootfsInstaller.installFromArchive(workspace.root, archive, onProgress = onProgress)
+                } finally {
+                    archive.delete()
+                }
+            }
+            updateShellState(workspace, WorkspaceShellStatus.READY.name)
+            return true
+        } catch (e: CancellationException) {
+            withContext(NonCancellable) {
+                restoreShellState(workspace)
+            }
+            throw e
+        } catch (e: InterruptedException) {
+            withContext(NonCancellable) {
+                restoreShellState(workspace)
+            }
+            throw CancellationException("Rootfs install cancelled").also { it.initCause(e) }
+        } catch (e: Throwable) {
+            Log.e(
+                TAG,
+                "installRootfsFromAsset failed: workspace=${workspace.id}, root=${workspace.root}, asset=$assetPath",
+                e
+            )
             updateShellState(workspace, WorkspaceShellStatus.BROKEN.name)
             throw e
         }

@@ -165,6 +165,7 @@ private val SAMPLE = Settings(
     webServerLocalhostOnly = true,
     backupReminderConfig = BackupReminderConfig(enabled = true),
     sponsorAlertDismissedAt = 7,
+    labSetting = LabSetting(labFeaturesEnabled = true, agentPreTerminalFileEnabled = true),
 )
 
 private val STORED_KEYS = setOf(
@@ -218,4 +219,5 @@ private val STORED_KEYS = setOf(
     "quick_messages",
     "backup_reminder_config",
     "sponsor_alert_dismissed_at",
+    "lab_setting",
 )

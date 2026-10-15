@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.ui.pages.extensions.workspace
 
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.webkit.MimeTypeMap
@@ -11,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
@@ -18,6 +20,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import me.rerere.rikkahub.data.datastore.LabSetting
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.workspace.RootfsInstallProgress
@@ -112,6 +115,10 @@ class WorkspaceDetailVM(
     private val _settingsError = MutableStateFlow<String?>(null)
     val settingsError = _settingsError.asStateFlow()
 
+    // 实验室功能设置，控制安装对话框是否提供"从内置文件安装"
+    private val _labSetting = MutableStateFlow(LabSetting())
+    val labSetting: StateFlow<LabSetting> = _labSetting.asStateFlow()
+
     fun dismissSettingsError() {
         _settingsError.value = null
     }
@@ -119,6 +126,11 @@ class WorkspaceDetailVM(
     init {
         loadWorkspace()
         refresh()
+        viewModelScope.launch {
+            repository.settingsFlow.collect { settings ->
+                _labSetting.value = settings.labSetting
+            }
+        }
     }
 
     fun selectArea(area: WorkspaceStorageArea) {
@@ -284,6 +296,28 @@ class WorkspaceDetailVM(
             try {
                 terminalSessionManager.closeWorkspace(workspace.root)
                 repository.installRootfs(workspace.id, url) { progress ->
+                    _installProgress.value = progress
+                }
+                loadWorkspace()
+                refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Throwable) {
+                _installError.value = error.message ?: "Rootfs 安装失败"
+            } finally {
+                _installProgress.value = null
+            }
+        }
+    }
+
+    fun installRootfsFromAsset(context: Context, assetPath: String) {
+        viewModelScope.launch {
+            _installError.value = null
+            val workspace = state.value.workspace ?: return@launch
+            _installProgress.value = RootfsInstallProgress(stage = RootfsInstallStage.EXTRACTING)
+            try {
+                terminalSessionManager.closeWorkspace(workspace.root)
+                repository.installRootfsFromAsset(workspace.id, context, assetPath) { progress ->
                     _installProgress.value = progress
                 }
                 loadWorkspace()

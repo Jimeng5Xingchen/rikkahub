@@ -15,6 +15,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.rerere.hugeicons.HugeIcons
+import me.rerere.hugeicons.stroke.ComputerTerminal01
 import me.rerere.hugeicons.stroke.Internet
 import me.rerere.hugeicons.stroke.Notification01
 import me.rerere.hugeicons.stroke.PaintBoard
@@ -88,6 +89,12 @@ fun SettingPreferencesPage() {
                         leadingContent = { CardGroupIcon(HugeIcons.Internet, containerColor = containerColor, contentColor = contentColor) },
                         headlineContent = { Text(stringResource(R.string.setting_page_preferences_network)) },
                         supportingContent = { Text(stringResource(R.string.setting_page_preferences_network_desc)) },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.SettingPreferencesLab) },
+                        leadingContent = { CardGroupIcon(HugeIcons.ComputerTerminal01, containerColor = containerColor, contentColor = contentColor) },
+                        headlineContent = { Text(stringResource(R.string.setting_page_lab)) },
+                        supportingContent = { Text(stringResource(R.string.setting_page_lab_desc)) },
                     )
                 }
             }

@@ -11,3 +11,9 @@ local.properties
 .cursor
 .history
 .kotlin
+/google-services.json
+app/google-services.json
+
+# 内置 rootfs 资产体积大且 GitHub fork 不允许推送 LFS 对象，
+# 由 scripts/fetch-bundled-rootfs.sh 生成，不纳入版本库
+app/src/main/assets/lab/*.tgz

@@ -175,6 +175,9 @@ class SettingsStore internal constructor(
         // 备份提醒
         val BACKUP_REMINDER_CONFIG = stringPreferencesKey("backup_reminder_config")
 
+        // 实验室功能
+        val LAB_SETTING = stringPreferencesKey("lab_setting")
+
         // 统计
         val LAUNCH_COUNT = intPreferencesKey("launch_count")
 

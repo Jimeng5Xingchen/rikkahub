@@ -43,6 +43,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingToolbarDefaults.ScreenOffset
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
@@ -102,6 +103,7 @@ import me.rerere.hugeicons.stroke.Tick01
 import me.rerere.hugeicons.stroke.Wrench01
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.data.ai.tools.resolveWorkspaceToolApproval
+import me.rerere.rikkahub.data.datastore.LabSetting
 import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import androidx.compose.ui.res.stringResource
 import me.rerere.rikkahub.R
@@ -152,6 +154,10 @@ fun WorkspaceDetailPage(id: String) {
     val installProgress by vm.installProgress.collectAsStateWithLifecycle()
     val installError by vm.installError.collectAsStateWithLifecycle()
     val settingsError by vm.settingsError.collectAsStateWithLifecycle()
+    val labSetting by vm.labSetting.collectAsStateWithLifecycle()
+    // 实验室功能总开关 + Agent 预终端文件开关均开启时，才提供内置 rootfs 安装
+    val bundledRootfsAvailable =
+        labSetting.labFeaturesEnabled && labSetting.agentPreTerminalFileEnabled
     val pagerState = rememberPagerState { WorkspaceDetailTab.entries.size }
     var deleteTarget by remember { mutableStateOf<WorkspaceFileEntry?>(null) }
     var showInstallDialog by remember { mutableStateOf(false) }
@@ -343,9 +349,14 @@ fun WorkspaceDetailPage(id: String) {
         if (showInstallDialog) {
             InstallRootfsDialog(
                 workspace = workspace,
+                bundledRootfsAvailable = bundledRootfsAvailable,
                 onDismiss = { showInstallDialog = false },
                 onConfirm = { url ->
                     vm.installRootfs(url)
+                    showInstallDialog = false
+                },
+                onInstallFromBundled = {
+                    vm.installRootfsFromAsset(context, LabSetting.ROOTFS_ASSET_PATH)
                     showInstallDialog = false
                 },
             )
@@ -601,8 +612,10 @@ private fun RootfsProgress(progress: RootfsInstallProgress) {
 @Composable
 private fun InstallRootfsDialog(
     workspace: WorkspaceEntity,
+    bundledRootfsAvailable: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
+    onInstallFromBundled: () -> Unit,
 ) {
     var url by rememberSaveable(workspace.id) { mutableStateOf(DEFAULT_ROOTFS_URL) }
 
@@ -623,6 +636,13 @@ private fun InstallRootfsDialog(
                     label = { Text(stringResource(R.string.workspace_detail_download_url)) },
                     maxLines = 5,
                 )
+                if (bundledRootfsAvailable) {
+                    Text(
+                        text = stringResource(R.string.workspace_detail_install_rootfs_bundled_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         confirmButton = {
@@ -634,8 +654,15 @@ private fun InstallRootfsDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.common_cancel))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (bundledRootfsAvailable) {
+                    FilledTonalButton(onClick = onInstallFromBundled) {
+                        Text(stringResource(R.string.workspace_detail_install_from_bundled))
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             }
         },
     )
